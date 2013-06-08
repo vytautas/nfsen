@@ -42,7 +42,7 @@ session_start();
 $expected_version = "1.3.6p1";
 
 // Session check
-if ( !array_key_exists('backend_version', $_SESSION ) || $_SESSION['backend_version'] !=  $expected_version ) {
+if ( array_key_exists('backend_version', $_SESSION ) && $_SESSION['backend_version'] !=  $expected_version ) {
 	session_destroy();
 	session_start();
 	$_SESSION['version'] = $expected_version;
