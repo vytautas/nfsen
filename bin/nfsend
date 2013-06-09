@@ -652,12 +652,13 @@ sub LoopLive {
 		
 		#
 		# determin, if we need some sleep. If we are done in this cycle
-		# sleep until next timeslot + 15s = 315s
+		# sleep until next timeslot + delay (e.g. 300+15s)
 		# otherwise we are behind time schedule. continue updating the 
 		# profiles until we are on track and can sleep
 		my $cycle_end = time();
-		if ( ($cycle_end - $lastcycle) < 315 ) {
-			my $sleeptime = $lastcycle + 315 - $cycle_end;
+		my $delay = 300 + $NfConf::PROFILERDELAY;
+		if ( ($cycle_end - $lastcycle) < $delay ) {
+			my $sleeptime = $lastcycle + $delay - $cycle_end;
 			sleep $sleeptime if $forever;
 		} else {
 			syslog('warning',"Behind schedule");

@@ -57,6 +57,7 @@ our $BUFFLEN;
 our $SUBDIRLAYOUT;
 our $DISKLIMIT;
 our $PROFILERS;
+our $PROFILERDELAY;
 our $COMMSOCKET;
 our %sources;
 our %sim;
@@ -129,6 +130,7 @@ sub LoadConfig {
 	$SUBDIRLAYOUT	 = 0;
 	$DISKLIMIT		 = 98;
 	$PROFILERS		 = 1;
+	$PROFILERDELAY	 = 15;
 	$COMMSOCKET		 = undef;
 	%sources		 = ();
 	%sim		 	 = ();
