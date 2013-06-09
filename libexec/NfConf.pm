@@ -45,6 +45,7 @@ our $CONFDIR;
 our $DOCDIR;
 our $VARDIR;
 our $PROFILEDATADIR;
+our $PROFILETMPDIR;
 our $PROFILESTATDIR;
 our $PLUGINDIR;
 our $PREFIX;
@@ -115,6 +116,7 @@ sub LoadConfig {
 	$DOCDIR			 = undef;
 	$VARDIR			 = undef;
 	$PROFILEDATADIR	 = undef;
+	$PROFILETMPDIR	 = undef;
 	$PROFILESTATDIR	 = undef;
 	$PLUGINDIR		 = undef;
 	$PREFIX			 = '/usr/local/bin';

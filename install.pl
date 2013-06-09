@@ -368,6 +368,8 @@ sub SetupEnv {
 		"$NfConf::INSTPREFIX$NfConf::PROFILESTATDIR/live",
 		"$NfConf::INSTPREFIX$NfConf::PROFILEDATADIR",
 		"$NfConf::INSTPREFIX$NfConf::PROFILEDATADIR/live",
+		"$NfConf::INSTPREFIX$NfConf::PROFILETMPDIR",
+		"$NfConf::INSTPREFIX$NfConf::PROFILETMPDIR/live",
 	);
 
 	print "\nUse UID/GID $nfsen_uid $www_gid\n";
@@ -387,6 +389,20 @@ sub SetupEnv {
 	print "\nProfile live: spool directories:\n";
 	foreach my $ident ( keys %NfConf::sources ) {
 		my $dir = "$NfConf::PROFILEDATADIR/live/$ident";
+		if ( ! -d $dir ) {
+			print "Creating: ";
+			mkpath($dir, 1, 0755) || die "Can't mkpath '$dir': $!\n";
+		} else {
+			print "Exists: ";
+		}
+		chmod 0775, $dir || die "Can't chown '$dir': $!\n";
+		chown $nfsen_uid, $www_gid, $dir || die "Can't chown '$dir': $!\n";
+		print "$ident\n";
+	}
+
+	print "\nProfile live: temporary directories:\n";
+	foreach my $ident ( keys %NfConf::sources ) {
+		my $dir = "$NfConf::PROFILETMPDIR/live/$ident";
 		if ( ! -d $dir ) {
 			print "Creating: ";
 			mkpath($dir, 1, 0755) || die "Can't mkpath '$dir': $!\n";

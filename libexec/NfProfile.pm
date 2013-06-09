@@ -915,7 +915,7 @@ sub ProfileHistory {
 
 	my $profilepath = ProfilePath($name, $group);
 	my $subdirlayout = $NfConf::SUBDIRLAYOUT ? "-S $NfConf::SUBDIRLAYOUT" : "";
-	my $arg = "-I -p $NfConf::PROFILEDATADIR -P $NfConf::PROFILESTATDIR $subdirlayout $NfConf::ZIPprofiles";
+	my $arg = "-I -p $NfConf::PROFILEDATADIR -P $NfConf::PROFILESTATDIR -U $NfConf::PROFILETMPDIR $subdirlayout $NfConf::ZIPprofiles";
 
 	# create argument list specific for each channel
 	# at the moment this contains of all channels in a continues profile
@@ -1036,26 +1036,53 @@ sub AddChannel {
 	# name is already validated from calling routine
 
 	# setup channel directory
-	my $dir = "$NfConf::PROFILEDATADIR/$profilepath/$channel";
-	mkdir "$dir" or
-		return "Can't create channel directory: '$dir' $!\n";
-
-	if ( !chmod 0775, $dir ) {
-		rmdir "$dir";
-		return "Can't chown '$dir': $! ";
+	my @dirs;
+	push @dirs, "$NfConf::PROFILEDATADIR/$profilepath/$channel";
+	if ( "$NfConf::PROFILETMPDIR" ne "$NfConf::PROFILEDATADIR" ) {
+		push @dirs, "$NfConf::PROFILETMPDIR/$profilepath/$channel";
 	}
-	if ( !chown $NfConf::UID, $NfConf::GID, $dir ) {
-		rmdir "$dir";
-		return "Can't chown '$dir': $! ";
+
+	my @created;
+	foreach my $dir ( @dirs ) {
+		# root might not have full access to a HDFS-FUSE mount.
+		# If permissions are correct, permit usage of existing directories.
+		if ( -d $dir) {
+			my @stat = stat($dir);
+			if ( $stat[2]&0700 != 0700 || $stat[4] != $NfConf::UID ) {
+				return "Invalid permission on existing channel directory '$dir'\n";            }
+			next;
+		}
+
+		mkdir "$dir" or
+			return "Can't create channel directory: '$dir' $!\n";
+		push @created, $dir;
+
+		if ( !chmod 0775, $dir ) {
+			my $err = "$!";
+			foreach my $cdir ( @created ) {
+				rmdir "$cdir";
+			}
+			return "Can't chmod '$dir': $err ";
+		}
+		if ( !chown $NfConf::UID, $NfConf::GID, $dir ) {
+			my $err = "$!";
+			foreach my $cdir ( @created ) {
+				rmdir "$cdir";
+			}
+			return "Can't chown '$dir': $err ";
+		}
 	}
 
 	if ( $profile ne 'live' || $profilegroup ne '.') {
 		# setup channel filter
 		my $filterfile = "$NfConf::PROFILESTATDIR/$profilepath/$channel-filter.txt";
 	
-		open(FILTER, ">$filterfile" ) or
-			rmdir "$dir",
+		if ( ! open(FILTER, ">$filterfile" ) ) {
+			foreach my $dir ( @dirs ) {
+				rmdir $dir;
+			}
 			return "Can't open filter file '$filter': $!";
+		}
 	
 		print FILTER map "$_\n", @$filter;
 		close FILTER;
@@ -1089,7 +1116,9 @@ sub AddChannel {
 	# $tstart - 300 ( 1 slot )
 	NfSenRRD::SetupRRD("$NfConf::PROFILESTATDIR/$profilepath", $channel, $tstart - 300, 1);
 	if ( defined $Log::ERROR ) {
-		rmdir "$NfConf::PROFILEDATADIR/$profilepath/$channel",
+		foreach my $dir ( @dirs ) {
+			rmdir $dir;
+		}
 		unlink $filter;
 		return "Creating RRD failed for channel '$channel': $Log::ERROR\n";
 	}
@@ -1121,6 +1150,10 @@ sub DeleteChannel {
 			return "Failed to rename channel '$channel' in order to delete: $!\n";
 		}
 		system "/bin/rm -rf $NfConf::PROFILEDATADIR/$profilepath/.$channel";
+	}
+
+	if ( -d "$NfConf::PROFILETMPDIR/$profilepath/$channel" ) {
+		system "/bin/rm -rf $NfConf::PROFILETMPDIR/$profilepath/$channel";
 	}
 
 	# Delete RRD DB
@@ -1369,7 +1402,7 @@ sub DoRebuild {
 			}
 			my $channellist = join ':', keys %{$liveprofile{'channel'}};
 			my $subdirlayout = $NfConf::SUBDIRLAYOUT ? "-S $NfConf::SUBDIRLAYOUT" : "";
-			my $arg = "-I -p $NfConf::PROFILEDATADIR -P $NfConf::PROFILESTATDIR $subdirlayout $NfConf::ZIPprofiles";
+			my $arg = "-I -p $NfConf::PROFILEDATADIR -P $NfConf::PROFILESTATDIR -U $NfConf::PROFILETMPDIR $subdirlayout $NfConf::ZIPprofiles";
 
 			# profile missing slots
 			if ( $t <= $tend ) {
@@ -1785,6 +1818,9 @@ sub AddProfile {
 	# if stat and data dirs differ
 	if ( "$NfConf::PROFILESTATDIR" ne "$NfConf::PROFILEDATADIR" ) {
 		push @dirs, "$NfConf::PROFILEDATADIR";
+	}
+	if ( "$NfConf::PROFILETMPDIR" ne "$NfConf::PROFILEDATADIR" ) {
+		push @dirs, "$NfConf::PROFILETMPDIR";
 	}
 
 	foreach my $dir ( @dirs ) {
@@ -2238,6 +2274,9 @@ sub DeleteProfile {
 	if ( "$NfConf::PROFILESTATDIR" ne "$NfConf::PROFILEDATADIR" ) {
 		push @dirs, "$NfConf::PROFILEDATADIR";
 	}
+	if ( "$NfConf::PROFILETMPDIR" ne "$NfConf::PROFILEDATADIR" ) {
+		push @dirs, "$NfConf::PROFILETMPDIR";
+	}
 	foreach my $dir ( @dirs ) {
 		if ( !Nfsync::semnowait() ) {
 			open DELFLAG, ">$NfConf::PROFILESTATDIR/$profilepath/.DELETED";
@@ -2304,10 +2343,13 @@ sub ReGroupProfile {
 	if ( "$NfConf::PROFILESTATDIR" ne "$NfConf::PROFILEDATADIR" ) {
 		push @dirs, "$NfConf::PROFILEDATADIR";
 	}
+	if ( "$NfConf::PROFILETMPDIR" ne "$NfConf::PROFILEDATADIR" ) {
+		push @dirs, "$NfConf::PROFILETMPDIR";
+	}
 
 	foreach my $dir ( @dirs ) {
 		if ( ! -d "$dir/$newgroup" && !mkdir "$dir/$newgroup" ) {
-			my $err = "Can't create new profile group directory '$NfConf::PROFILESTATDIR/$newgroup': $!";
+			my $err = "Can't create new profile group directory '$dir/$newgroup': $!";
 			syslog("err", "$err");
 			Nfsync::semsignal();
 			return "$err\n";
@@ -2328,12 +2370,25 @@ sub ReGroupProfile {
 	} 
 	if ( "$NfConf::PROFILESTATDIR" ne "$NfConf::PROFILEDATADIR" ) {
 		if ( !rename "$NfConf::PROFILEDATADIR/$profilepath", "$NfConf::PROFILEDATADIR/$newprofilepath" ) {
+			my $err = "$!";
 			# ohhh this is really bad! try to restore old profile stat dir
 			rename "$NfConf::PROFILESTATDIR/$newprofilepath", "$NfConf::PROFILESTATDIR/$profilegroup";
 
 			Nfsync::semsignal();
-			return "Failed to rename profile '$profile': $!\n";
+			return "Failed to rename profile '$profile': $err\n";
 		} 
+	}
+	if ( "$NfConf::PROFILETMPDIR" ne "$NfConf::PROFILEDATADIR" ) {
+		if ( !rename "$NfConf::PROFILETMPDIR/$profilepath", "$NfConf::PROFILETMPDIR/$newprofilepath" ) {
+			my $err = "$!";
+			# ohhh this is really bad! try to restore old profile stat dir
+			rename "$NfConf::PROFILESTATDIR/$newprofilepath", "$NfConf::PROFILESTATDIR/$profilegroup";
+			if ( "$NfConf::PROFILESTATDIR" ne "$NfConf::PROFILEDATADIR" ) {
+				rename "$NfConf::PROFILEDATADIR/$newprofilepath", "$NfConf::PROFILEDATADIR/$profilegroup";
+			}
+			Nfsync::semsignal();
+			return "Failed to rename profile '$profile': $err\n";
+		}
 	}
 
 	$$profileref{'group'} = $newgroup;

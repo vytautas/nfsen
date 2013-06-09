@@ -104,13 +104,13 @@ sub StartCollector {
 				print "\nError( Port: $port ): Missing flow source IP address for '$ident'\n";
 				return;
 			}
-			$src_args .= "-n $ident,$IP,$NfConf::PROFILEDATADIR/live/$ident ";
+			$src_args .= "-n $ident,$IP,$NfConf::PROFILETMPDIR/live/$ident ";
 			$optargs     = exists $NfConf::sources{$ident}{'optarg'} ? "$optargs $NfConf::sources{$ident}{'optarg'}" : '';
 		}
 	} else {
 		# single source
 		my $ident = shift @SourceList;
-		my $profiledir	= "$NfConf::PROFILEDATADIR/live/$ident";
+		my $profiledir	= "$NfConf::PROFILETMPDIR/live/$ident";
 		$optargs     = exists $NfConf::sources{$ident}{'optarg'} ? $NfConf::sources{$ident}{'optarg'} : '';
 		$src_args = "-I $ident -l $profiledir ";
 	}
