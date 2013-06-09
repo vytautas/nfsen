@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# Copyright (c) 2013, Vytautas Krakauskas
+# Copyright (c) 2013, Kaunas university of technology
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# * Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution.
+# * Neither the name of the Kaunas university of technology nor the
+# names of its contributors may be used to endorse or promote products
+# derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+# TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+# LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+# This is an example script to copy nfcapd files to HDFS.
+# It should be run after each cycle. E.g.:
+#
+# 'peer1'  => { 'port' => '9995', 'col' => '#0000FF', 'optarg' => '-x "/opt/nfsen/bin/nf2hdfs %d/%f"'}
+#
+# If there are many sources, default delay of 15s might not be
+# long enough to copy all the files and should be increased.
+
+
+if [ $# -ne 1 ]; then
+	echo "Usage: nf2hdfs <file>"
+	exit 1
+fi
+
+if [ ! -e $1 ]; then
+	echo "File not found: $1"
+	exit 1
+fi
+
+# Uncomment and provide your values if needed
+#export JAVA_HOME=/usr/lib/jvm/java-6-sun
+#export PATH=$PATH:/opt/hadoop/bin
+
+# Based on SUBDIRLAYOUT=7 (e.g. /any/path/to/tmp/GROUP/IDENT/Y-m-d/FILE)
+# and should be modified for other layouts.
+dst="/netflow/$(awk -F/ '{print $(NF-3)"/"$(NF-2)"/"$(NF-1)"/"$(NF)}'<<<$1)"
+srcdir=$(dirname $1)
+dstdir=$(dirname $dst)
+
+#move the file to HDFS
+hdfs dfs -test -e $dstdir || hdfs dfs -mkdir $dstdir || exit 1
+hdfs dfs -moveFromLocal $1 $dst
+
+#remove old dir
+rm -r $srcdir
